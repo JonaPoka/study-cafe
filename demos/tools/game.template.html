@@ -1,0 +1,989 @@
+<title>Study Café Demo</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&amp;family=Nunito:wght@400;600;700;800&amp;display=swap">
+<style>
+/* Layout: one scaled 1280x800 game stage (640x400 pixel world at 2x) with HUD overlaid; wardrobe, debug and credits float above it. Single dark café-at-night look. */
+:root {
+  --bg: #120D16;
+  --ink: #F6E7CF;
+  --ink-soft: #CBB7D6;
+  --ink-faint: #9A88A6;
+  --panel: rgba(22, 16, 28, 0.88);
+  --panel-solid: #1B1421;
+  --panel-raised: #2A2034;
+  --line: #4A3854;
+  --edge: #0B080E;
+  --amber: #F2B661;
+  --amber-ink: #2A1A12;
+  --mint: #9FD8A4;
+  --rose: #F09A8A;
+  --font-display: 'Pixelify Sans', 'Courier New', monospace;
+  --font-body: 'Nunito', 'Segoe UI', system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); overflow: hidden; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+.viewport { position: relative; width: 100%; height: 100%; overflow: hidden; }
+.stage { position: absolute; left: 50%; top: 50%; width: 1280px; height: 800px; transform-origin: 0 0; }
+#world, #labels { position: absolute; inset: 0; width: 1280px; height: 800px; }
+#world { image-rendering: pixelated; image-rendering: crisp-edges; }
+#labels { pointer-events: none; }
+.hud { position: absolute; inset: 0; pointer-events: none; font-family: var(--font-display); }
+.hud > * { pointer-events: auto; }
+
+.chip { background: var(--panel); border: 2px solid var(--edge); box-shadow: inset 0 0 0 2px var(--line); border-radius: 6px; }
+.plate { position: absolute; left: 16px; top: 16px; padding: 8px 14px 10px; display: flex; flex-direction: column; gap: 2px; }
+.plate strong { font-size: 22px; font-weight: 600; color: #FFF3DE; }
+.plate span { font-family: var(--font-body); font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.topright { position: absolute; right: 16px; top: 16px; display: flex; gap: 8px; align-items: stretch; }
+.beans { display: flex; align-items: center; gap: 10px; padding: 6px 14px; }
+.beans img { width: 32px; height: 28px; image-rendering: pixelated; }
+.beans b { font-size: 24px; font-weight: 500; color: var(--amber); font-variant-numeric: tabular-nums; }
+.beans small { font-family: var(--font-body); font-size: 12px; color: var(--ink-soft); }
+.hudbtn { display: flex; align-items: center; gap: 8px; padding: 0 12px; font-family: var(--font-display); font-size: 16px; color: var(--ink); }
+.key { font-family: var(--font-display); font-size: 12px; background: var(--amber); color: var(--amber-ink); border-radius: 3px; padding: 1px 6px; line-height: 1.3; }
+
+.toasts { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; }
+.toast { background: var(--panel); border-radius: 6px; padding: 7px 14px; font-family: var(--font-body); font-size: 14px; font-weight: 700; color: var(--ink); display: flex; gap: 8px; align-items: center; animation: toastIn .25s ease-out; }
+.toast i { width: 8px; height: 8px; background: var(--mint); display: inline-block; }
+.toast.gold i { background: var(--amber); }
+@keyframes toastIn { from { transform: translateY(-6px); opacity: 0.4; } to { transform: none; opacity: 1; } }
+
+.hint { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); padding: 8px 14px; display: flex; gap: 14px; align-items: center; font-family: var(--font-body); font-size: 14px; font-weight: 700; color: var(--ink-soft); white-space: nowrap; }
+.hint span { display: inline-flex; gap: 6px; align-items: center; }
+
+.timer { position: absolute; right: 16px; bottom: 16px; width: 280px; box-sizing: border-box; padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 9px; }
+.timer .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.phase { font-size: 14px; letter-spacing: 1.5px; color: var(--mint); }
+.phase.break { color: var(--amber); }
+.clock { font-size: 52px; line-height: 1; color: #FFF3DE; font-variant-numeric: tabular-nums; }
+.earned { font-family: var(--font-body); font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.segs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.segs div { height: 8px; background: #3A2C44; position: relative; overflow: hidden; }
+.segs div span { position: absolute; inset: 0 auto 0 0; background: var(--amber); }
+.subject { display: flex; align-items: center; gap: 8px; font-family: var(--font-body); font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.subject input { flex: 1; min-width: 0; background: rgba(10, 7, 14, 0.7); border: 2px solid var(--line); border-radius: 4px; padding: 5px 8px; font-family: var(--font-body); font-size: 14px; color: var(--ink); }
+.btnrow { display: flex; gap: 8px; }
+.btn { flex: 1; border-radius: 4px; padding: 8px 10px; font-family: var(--font-display); font-size: 16px; border: 2px solid var(--line); background: transparent; color: var(--ink); }
+.btn.primary { background: var(--amber); color: var(--amber-ink); border-color: var(--edge); }
+
+/* Floating panels (outside the scaled stage so they stay readable on phones) */
+.panel { position: fixed; z-index: 10; background: var(--panel-solid); border: 2px solid var(--edge); box-shadow: inset 0 0 0 2px var(--line), 0 18px 40px rgba(0,0,0,.45); border-radius: 10px; color: var(--ink); display: flex; flex-direction: column; max-height: calc(100% - 32px); }
+.panel header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px 10px; border-bottom: 2px solid var(--line); }
+.panel header h2 { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 600; }
+.panel .body { padding: 12px 16px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.close { background: transparent; border: 2px solid var(--line); border-radius: 4px; width: 34px; height: 34px; font-family: var(--font-display); font-size: 16px; color: var(--ink); }
+.drawer { right: 16px; top: 16px; width: min(400px, calc(100% - 32px)); }
+.debug { left: 16px; top: 16px; width: min(320px, calc(100% - 32px)); font-size: 13px; }
+.label { font-family: var(--font-body); font-size: 12px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; color: var(--ink-faint); }
+.group { display: flex; flex-direction: column; gap: 7px; }
+.swatches { display: flex; flex-wrap: wrap; gap: 5px; }
+.sw { width: 26px; height: 26px; border-radius: 5px; border: 2px solid var(--edge); padding: 0; }
+.sw[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink); }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.opt { border: 2px solid var(--line); background: transparent; border-radius: 5px; padding: 4px 9px; font-family: var(--font-display); font-size: 14px; color: var(--ink); }
+.opt[aria-pressed="true"] { background: var(--amber); color: var(--amber-ink); border-color: var(--edge); }
+.preview { display: flex; gap: 12px; align-items: center; }
+.preview canvas { width: 128px; height: 128px; image-rendering: pixelated; background: #5A4130; border-radius: 8px; box-shadow: inset 0 0 0 2px var(--line); flex-shrink: 0; }
+.preview .side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.preview p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink-soft); }
+
+.stats { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-family: var(--font-display); font-size: 13px; font-variant-numeric: tabular-nums; }
+.stats dt { color: var(--ink-faint); }
+.stats dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+.toggle input { accent-color: var(--amber); width: 16px; height: 16px; }
+.fieldrow { display: flex; gap: 10px; flex-wrap: wrap; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: var(--ink-soft); flex: 1; min-width: 90px; }
+.field input { background: #0F0B13; border: 2px solid var(--line); border-radius: 4px; padding: 5px 8px; font-family: var(--font-display); font-size: 14px; }
+.field input[type="range"] { padding: 0; border: 0; background: transparent; accent-color: var(--amber); }
+.log { margin: 0; padding: 8px 10px; list-style: none; background: #0F0B13; border-radius: 6px; font-family: var(--font-display); font-size: 12px; color: var(--ink-soft); max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+
+.modal { position: fixed; inset: 0; z-index: 20; background: rgba(8, 5, 10, 0.6); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.modal .panel { position: relative; width: min(560px, 100%); }
+.modal p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--ink-soft); max-width: 65ch; }
+.modal h3 { margin: 0; font-family: var(--font-display); font-size: 17px; font-weight: 600; color: var(--ink); }
+.modal a { color: var(--amber); }
+
+.dirlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.dirrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: var(--panel-raised); border-radius: 8px; }
+.dirinfo { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dirinfo strong { font-family: var(--font-display); font-size: 17px; font-weight: 600; }
+.dirinfo span { font-size: 13px; color: var(--ink-soft); }
+.dirrow .btn { flex: 0 0 auto; }
+.btn:disabled { opacity: 0.55; cursor: default; }
+.fade { position: fixed; inset: 0; z-index: 30; background: #08050A; opacity: 0; pointer-events: none; transition: opacity .28s ease; }
+.fade.on { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .fade { transition: none; } }
+.loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 20px; color: var(--ink-soft); }
+
+.touch { position: fixed; z-index: 5; inset: auto 0 0 0; display: none; justify-content: space-between; align-items: flex-end; padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); pointer-events: none; }
+.touch > * { pointer-events: auto; }
+.dpad { display: grid; grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(3, 52px); gap: 4px; }
+.dpad button, .tbtn { background: var(--panel); border: 2px solid var(--line); border-radius: 10px; font-family: var(--font-display); font-size: 18px; color: var(--ink); touch-action: none; user-select: none; -webkit-user-select: none; }
+.tbtn { width: 72px; height: 72px; border-radius: 36px; background: var(--amber); color: var(--amber-ink); border-color: var(--edge); font-size: 22px; }
+@media (pointer: coarse) { .touch { display: flex; } .hint { display: none; } }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+</style>
+
+<div class="viewport" id="viewport">
+  <div class="stage" id="stage">
+    <canvas id="world" width="640" height="400" aria-label="Café room: walk around, sit at a free seat and study"></canvas>
+    <canvas id="labels" width="1280" height="800" aria-hidden="true"></canvas>
+    <div class="loading" id="loading">Brewing the café…</div>
+    <div class="hud" id="hud" hidden>
+      <div class="plate chip"><strong id="plateName">Central Plaza</strong><span id="crowd">Demo</span></div>
+      <div class="topright">
+        <div class="beans chip" title="Coffee beans earned by studying">
+          <img id="beanIcon" alt="">
+          <div style="display:flex;flex-direction:column;gap:0"><b id="beanCount">0</b><small id="hoursLine">0 min studied</small></div>
+        </div>
+        <button type="button" class="hudbtn chip" id="openWardrobe">Wardrobe <span class="key">C</span></button>
+        <button type="button" class="hudbtn chip" id="openDebug">Debug <span class="key">`</span></button>
+        <button type="button" class="hudbtn chip" id="openCredits">Credits</button>
+      </div>
+      <div class="toasts" id="toasts" aria-live="polite"></div>
+      <div class="hint chip" id="hint">
+        <span><span class="key">WASD</span> move</span>
+        <span><span class="key">E</span> sit or enter</span>
+        <span>walk into a door to go inside</span>
+        <span><span class="key">C</span> wardrobe</span>
+        <span><span class="key">`</span> debug</span>
+      </div>
+      <div class="timer chip" id="timer" hidden>
+        <div class="row"><span class="phase" id="phase">FOCUS</span><span class="earned" id="pomoCount">Pomodoro 1</span></div>
+        <div class="row"><span class="clock" id="clock">25:00</span><span class="earned" id="earned">+0 beans</span></div>
+        <div class="segs" id="segs"><div><span></span></div><div><span></span></div><div><span></span></div><div><span></span></div></div>
+        <label class="subject" for="subject">Studying <input id="subject" type="text" maxlength="24" value="Chemistry" autocomplete="off"></label>
+        <div class="btnrow">
+          <button type="button" class="btn primary" id="pauseBtn">Pause</button>
+          <button type="button" class="btn" id="standBtn">Stand up</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<aside class="panel drawer" id="wardrobe" hidden aria-label="Wardrobe">
+  <header><h2>Wardrobe</h2><button type="button" class="close" id="closeWardrobe" aria-label="Close wardrobe">X</button></header>
+  <div class="body" id="wardrobeBody">
+    <div class="preview">
+      <canvas id="previewCanvas" width="64" height="64"></canvas>
+      <div class="side">
+        <p>Every part is a separate LPC sprite layer, recolored from the generator's own palettes. Changes apply to your character right away.</p>
+        <div class="btnrow"><button type="button" class="btn" id="randomize">Randomize</button><button type="button" class="btn primary" id="doneWardrobe">Done</button></div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<aside class="panel debug" id="debug" hidden aria-label="Debug menu">
+  <header><h2>Debug</h2><button type="button" class="close" id="closeDebug" aria-label="Close debug menu">X</button></header>
+  <div class="body">
+    <dl class="stats" id="stats"></dl>
+    <div class="group">
+      <span class="label">Show</span>
+      <label class="toggle"><input type="checkbox" id="dbgColl"> Collision boxes</label>
+      <label class="toggle"><input type="checkbox" id="dbgSeats"> Seats and sit points</label>
+      <label class="toggle"><input type="checkbox" id="dbgSort"> Draw order (sort lines)</label>
+      <label class="toggle"><input type="checkbox" id="dbgNight" checked> Evening lighting</label>
+      <label class="toggle"><input type="checkbox" id="dbgNpcs" checked> Other players</label>
+      <label class="toggle"><input type="checkbox" id="dbgTags" checked> Name tags</label>
+    </div>
+    <div class="group">
+      <span class="label">Time speed</span>
+      <div class="chips" id="speedChips"></div>
+    </div>
+    <div class="fieldrow">
+      <label class="field" for="focusMin">Focus (min)<input id="focusMin" type="number" min="1" max="120" value="25"></label>
+      <label class="field" for="breakMin">Break (min)<input id="breakMin" type="number" min="1" max="60" value="5"></label>
+    </div>
+    <label class="field" for="walkSpeed">Walk speed <span id="walkSpeedVal">70 px/s</span><input id="walkSpeed" type="range" min="30" max="180" value="70"></label>
+    <div class="chips">
+      <button type="button" class="opt" id="dbgBeans">+100 beans</button>
+      <button type="button" class="opt" id="dbgSkip">Skip to end of phase</button>
+      <button type="button" class="opt" data-goto="plaza">Go to plaza</button>
+      <button type="button" class="opt" data-goto="cafe">Go to your café</button>
+      <button type="button" class="opt" data-goto="weekly">Go to weekly café</button>
+      <button type="button" class="opt" id="dbgReset">Reset save</button>
+    </div>
+    <div class="group"><span class="label">Event log</span><ul class="log" id="log"></ul></div>
+  </div>
+</aside>
+
+<div class="modal" id="credits" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="creditsTitle">
+    <header><h2 id="creditsTitle">Credits</h2><button type="button" class="close" id="closeCredits" aria-label="Close credits">X</button></header>
+    <div class="body" id="creditsBody"></div>
+  </div>
+</div>
+
+<div class="modal" id="directory" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="dirTitle">
+    <header><h2 id="dirTitle">Café directory</h2><button type="button" class="close" id="closeDirectory" aria-label="Close directory">X</button></header>
+    <div class="body">
+      <p>Public cafés players have built. In the full game this list is searchable; in this demo two of them can be visited.</p>
+      <ul class="dirlist" id="dirList"></ul>
+    </div>
+  </div>
+</div>
+
+<div class="fade" id="fade" aria-hidden="true"></div>
+
+<div class="touch" id="touch" aria-label="Touch controls">
+  <div class="dpad">
+    <span></span><button type="button" data-dir="up" aria-label="Move up">W</button><span></span>
+    <button type="button" data-dir="left" aria-label="Move left">A</button><span></span><button type="button" data-dir="right" aria-label="Move right">D</button>
+    <span></span><button type="button" data-dir="down" aria-label="Move down">S</button><span></span>
+  </div>
+  <button type="button" class="tbtn" id="touchE" aria-label="Sit or stand">E</button>
+</div>
+
+<script>window.ASSETS = /*ASSETS*/;</script>
+<script>
+(function () {
+'use strict';
+var A = window.ASSETS;
+var W = A.size[0], H = A.size[1];
+var SAVE_KEY = 'study-cafe-demo-v1';
+var DIRS = { up: 0, left: 1, down: 2, right: 3 };
+
+// ---------- helpers ----------
+function $(id) { return document.getElementById(id); }
+function loadImage(src) { return new Promise(function (res, rej) { var i = new Image(); i.onload = function () { res(i); }; i.onerror = rej; i.src = src; }); }
+function hexToRgb(h) { h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function pretty(s) { return s.replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); }); }
+function fmt(sec) { sec = Math.max(0, Math.ceil(sec)); var m = Math.floor(sec / 60), s = sec % 60; return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s; }
+function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+// ---------- save ----------
+function readSave() { try { var s = localStorage.getItem(SAVE_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+function writeSave() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ beans: G.beans, minutes: G.minutes, spec: G.player.spec, subject: $('subject').value, focusMin: G.focusMin, breakMin: G.breakMin })); } catch (e) {}
+}
+
+// ---------- sprite sheets + recolor ----------
+var IMG = {};          // 'path|anim' -> Image
+var RECOLOR = {};      // cache of recolored canvases
+function recolored(path, anim, maps) {
+  var key = path + '|' + anim + '|' + maps.map(function (m) { return m[0] + ':' + m[1]; }).join(',');
+  if (RECOLOR[key]) return RECOLOR[key];
+  var img = IMG[path + '|' + anim];
+  var c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+  var x = c.getContext('2d'); x.drawImage(img, 0, 0);
+  var swaps = new Map();
+  maps.forEach(function (m) {
+    var mat = m[0], name = m[1], base = A.palettes.base[mat];
+    if (!name || name === base) return;
+    var from = A.palettes[mat][base], to = A.palettes[mat][name];
+    if (!from || !to) return;
+    for (var i = 0; i < from.length; i++) {
+      var f = hexToRgb(from[i]);
+      swaps.set((f[0] << 16) | (f[1] << 8) | f[2], hexToRgb(to[i]));
+    }
+  });
+  if (swaps.size) {
+    var d = x.getImageData(0, 0, c.width, c.height), p = d.data;
+    for (var j = 0; j < p.length; j += 4) {
+      if (!p[j + 3]) continue;
+      var t = swaps.get((p[j] << 16) | (p[j + 1] << 8) | p[j + 2]);
+      if (t) { p[j] = t[0]; p[j + 1] = t[1]; p[j + 2] = t[2]; }
+    }
+    x.putImageData(d, 0, 0);
+  }
+  RECOLOR[key] = c;
+  return c;
+}
+var CAT = A.catalog;
+function layersFor(s) {
+  var bt = s.body, t = bt === 'female' ? 'thin' : 'male', L = [];
+  L.push({ p: CAT.body[bt], z: 10, m: [['body', s.skin]] });
+  L.push({ p: CAT.legs[s.legs].path.replace('{t}', t), z: 20, m: [['cloth', s.legsColor]] });
+  var ft = CAT.feet[s.feet]; L.push({ p: ft.path.replace('{t}', t), z: ft.z, m: [['cloth', s.shoesColor]] });
+  L.push({ p: CAT.top[s.top].path.replace('{b}', bt), z: 35, m: [['cloth', s.topColor]] });
+  if (s.scarf) L.push({ p: CAT.scarf, z: 90, m: [['cloth', s.scarfColor]] });
+  L.push({ p: CAT.head[bt], z: 100, m: [['body', s.skin], ['eye', s.eyes]] });
+  L.push({ p: CAT.face[bt], z: 101, m: [['body', s.skin], ['eye', s.eyes]] });
+  L.push({ p: CAT.nose, z: 105, m: [['body', s.skin]] });
+  L.push({ p: CAT.brows, z: 106, m: [['hair', s.hairColor]] });
+  if (s.glasses) L.push({ p: CAT.glasses, z: 115, m: [] });
+  var h = CAT.hair[s.hair];
+  L.push({ p: h.fg, z: 120, m: [['hair', s.hairColor]] });
+  if (h.bg) L.push({ p: h.bg, z: 9, m: [['hair', s.hairColor]] });
+  return L.sort(function (a, b) { return a.z - b.z; });
+}
+var SHEET_SIZE = { walk: [576, 256], sit: [192, 256], idle: [128, 256] };
+function buildCharacter(spec) {
+  var out = {};
+  ['walk', 'sit', 'idle'].forEach(function (anim) {
+    var c = document.createElement('canvas'); c.width = SHEET_SIZE[anim][0]; c.height = SHEET_SIZE[anim][1];
+    var x = c.getContext('2d');
+    layersFor(spec).forEach(function (l) { if (IMG[l.p + '|' + anim]) x.drawImage(recolored(l.p, anim, l.m), 0, 0); });
+    out[anim] = c;
+  });
+  return out;
+}
+
+// ---------- options ----------
+var OPTS = {
+  skin: ['light', 'amber', 'olive', 'taupe', 'bronze', 'brown', 'black', 'lavender', 'blue', 'pale_green'],
+  eyes: Object.keys(A.palettes.eye),
+  hairColor: Object.keys(A.palettes.hair),
+  cloth: Object.keys(A.palettes.cloth),
+  hair: Object.keys(CAT.hair), top: Object.keys(CAT.top), legs: Object.keys(CAT.legs), feet: Object.keys(CAT.feet)
+};
+var DEFAULT_SPEC = { body: 'female', skin: 'light', eyes: 'blue', hair: 'long', hairColor: 'dark_brown', top: 'cardigan', topColor: 'red', legs: 'pants', legsColor: 'navy', feet: 'shoes', shoesColor: 'black', glasses: false, scarf: false, scarfColor: 'yellow' };
+function validSpec(s) {
+  var d = Object.assign({}, DEFAULT_SPEC, s || {});
+  if (!CAT.body[d.body]) d.body = 'female';
+  if (!CAT.hair[d.hair]) d.hair = 'long';
+  if (!CAT.top[d.top]) d.top = 'tshirt';
+  if (!CAT.legs[d.legs]) d.legs = 'pants';
+  if (!CAT.feet[d.feet]) d.feet = 'shoes';
+  if (!A.palettes.body[d.skin]) d.skin = 'light';
+  if (!A.palettes.eye[d.eyes]) d.eyes = 'blue';
+  ['hairColor'].forEach(function (k) { if (!A.palettes.hair[d[k]]) d[k] = 'dark_brown'; });
+  ['topColor', 'legsColor', 'shoesColor', 'scarfColor'].forEach(function (k) { if (!A.palettes.cloth[d[k]]) d[k] = 'white'; });
+  return d;
+}
+function randomSpec() {
+  return { body: pick(['female', 'male']), skin: pick(OPTS.skin.slice(0, 7)), eyes: pick(OPTS.eyes), hair: pick(OPTS.hair), hairColor: pick(OPTS.hairColor),
+    top: pick(OPTS.top), topColor: pick(OPTS.cloth), legs: pick(OPTS.legs), legsColor: pick(OPTS.cloth), feet: pick(OPTS.feet), shoesColor: pick(OPTS.cloth),
+    glasses: Math.random() < 0.3, scarf: Math.random() < 0.25, scarfColor: pick(OPTS.cloth) };
+}
+
+// ---------- world / scenes ----------
+var SCENES = {};
+var S = null; // current scene
+Object.keys(A.scenes).forEach(function (k) {
+  var d = A.scenes[k];
+  SCENES[k] = { name: k, data: d, bg: null, objs: [], coll: d.collisions, bounds: d.bounds, exits: d.exits || [], signs: d.signs || [],
+    glows: d.glows || [], tint: d.tint || '#CCBDE0', seats: d.seats.map(function (s) { return Object.assign({ occupant: null }, s); }), npcs: [] };
+});
+function seatById(sc, id) { for (var i = 0; i < sc.seats.length; i++) if (sc.seats[i].id === id) return sc.seats[i]; return null; }
+
+var G = {
+  beans: 0, minutes: 0, focusMin: 25, breakMin: 5, timeScale: 1, speed: 70, clock: 0,
+  show: { coll: false, seats: false, sort: false, night: true, npcs: true, tags: true },
+  player: { x: 320, y: 380, dir: 'up', moving: false, t: 0, spec: null, sheets: null, seat: null },
+  session: null, fps: 0, logs: [], returnTo: null, fading: false, nearExit: null, pushT: 0
+};
+
+function blocked(x, y) {
+  var B = S.bounds, C = S.coll;
+  var hx0 = x - 6, hx1 = x + 6, hy0 = y - 4, hy1 = y + 2;
+  if (hx0 < B.x0 || hx1 > B.x1 || hy0 < B.y0 || hy1 > B.y1) return true;
+  for (var i = 0; i < C.length; i++) {
+    var c = C[i];
+    if (hx1 > c.x && hx0 < c.x + c.w && hy1 > c.y && hy0 < c.y + c.h) return true;
+  }
+  return false;
+}
+
+// ---------- NPCs ----------
+var NPC_DEFS = {
+  cafe: [
+    { name: 'toivo', seat: 'deskR', subject: 'Math', offset: 300, spec: { body: 'male', skin: 'brown', eyes: 'brown', hair: 'messy1', hairColor: 'black', top: 'tshirt', topColor: 'green', legs: 'pants', legsColor: 'charcoal', feet: 'shoes', shoesColor: 'black', glasses: true } },
+    { name: 'mira', seat: 'roundAL', subject: 'Biology', offset: 1320, spec: { body: 'female', skin: 'olive', eyes: 'green', hair: 'ponytail', hairColor: 'blonde', top: 'longsleeve', topColor: 'teal', legs: 'skirt', legsColor: 'maroon', feet: 'shoes', shoesColor: 'brown' } },
+    { name: 'aaro', seat: 'stoolA', subject: 'History', offset: 600, spec: { body: 'male', skin: 'taupe', eyes: 'gray', hair: 'parted', hairColor: 'chestnut', top: 'polo', topColor: 'slate', legs: 'pants', legsColor: 'charcoal', feet: 'boots', shoesColor: 'brown' } },
+    { name: 'lumi', seat: 'sofaL', subject: 'Reading', offset: 900, spec: { body: 'female', skin: 'amber', eyes: 'purple', hair: 'wavy', hairColor: 'rose', top: 'cardigan', topColor: 'lavender', legs: 'pants', legsColor: 'charcoal', feet: 'shoes', shoesColor: 'white', glasses: true } },
+    { name: 'sanni', walker: 'looking for a seat', spec: { body: 'female', skin: 'black', eyes: 'brown', hair: 'pixie', hairColor: 'raven', top: 'tshirt', topColor: 'sky', legs: 'shorts', legsColor: 'tan', feet: 'shoes', shoesColor: 'white', scarf: true, scarfColor: 'yellow' },
+      path: [[320, 368], [330, 262], [198, 262], [198, 372], [330, 368], [380, 236], [560, 236], [380, 236]] }
+  ],
+  weekly: [
+    { name: 'mira', seat: 'deskR', subject: 'Physics', offset: 120, spec: { body: 'female', skin: 'olive', eyes: 'green', hair: 'ponytail', hairColor: 'blonde', top: 'cardigan', topColor: 'forest', legs: 'skirt', legsColor: 'maroon', feet: 'boots', shoesColor: 'brown' } },
+    { name: 'noa', seat: 'stoolB', subject: 'Chemistry', offset: 1100, spec: { body: 'female', skin: 'bronze', eyes: 'brown', hair: 'bunches', hairColor: 'black', top: 'polo', topColor: 'yellow', legs: 'pants', legsColor: 'navy', feet: 'shoes', shoesColor: 'black' } },
+    { name: 'eetu', seat: 'sofaR', subject: 'Swedish', offset: 700, spec: { body: 'male', skin: 'light', eyes: 'blue', hair: 'curtains', hairColor: 'sandy', top: 'longsleeve', topColor: 'navy', legs: 'pants', legsColor: 'tan', feet: 'shoes', shoesColor: 'white', scarf: true, scarfColor: 'red' } },
+    { name: 'pixelbean', seat: 'roundBR', subject: 'Coding', offset: 1500, spec: { body: 'male', skin: 'amber', eyes: 'gray', hair: 'bangsshort', hairColor: 'ginger', top: 'tshirt', topColor: 'orange', legs: 'shorts', legsColor: 'charcoal', feet: 'shoes', shoesColor: 'black', glasses: true } },
+    { name: 'veera', walker: 'browsing the menu', spec: { body: 'female', skin: 'taupe', eyes: 'purple', hair: 'page', hairColor: 'violet', top: 'sleeveless', topColor: 'rose', legs: 'pants', legsColor: 'black', feet: 'boots', shoesColor: 'black' },
+      path: [[380, 236], [560, 236], [560, 230], [380, 236], [320, 370], [210, 262]] }
+  ],
+  plaza: [
+    { name: 'kalle', seat: 'outL', subject: 'Economics', offset: 500, spec: { body: 'male', skin: 'olive', eyes: 'brown', hair: 'buzzcut', hairColor: 'dark_brown', top: 'polo', topColor: 'maroon', legs: 'pants', legsColor: 'navy', feet: 'shoes', shoesColor: 'brown' } },
+    { name: 'aino', stand: [488, 236, 'right'], says: ['did you finish the essay?', 'see you in the weekly café?'], spec: { body: 'female', skin: 'light', eyes: 'blue', hair: 'long_straight', hairColor: 'platinum', top: 'cardigan', topColor: 'sky', legs: 'skirt', legsColor: 'navy', feet: 'shoes', shoesColor: 'white' } },
+    { name: 'onni', stand: [522, 236, 'left'], says: ['two pomodoros left!', 'yes, mira built it'], spec: { body: 'male', skin: 'brown', eyes: 'green', hair: 'messy1', hairColor: 'dark_gray', top: 'tshirt', topColor: 'forest', legs: 'shorts', legsColor: 'tan', feet: 'boots', shoesColor: 'brown' } },
+    { name: 'veikko', walker: 'heading to a café', spec: { body: 'male', skin: 'bronze', eyes: 'gray', hair: 'parted', hairColor: 'black', top: 'longsleeve', topColor: 'lavender', legs: 'pants', legsColor: 'charcoal', feet: 'shoes', shoesColor: 'black' },
+      path: [[200, 262], [440, 262], [440, 360], [200, 360]] },
+    { name: 'ella', walker: 'walking around', spec: { body: 'female', skin: 'black', eyes: 'brown', hair: 'wavy', hairColor: 'dark_brown', top: 'polo', topColor: 'yellow', legs: 'pants', legsColor: 'navy', feet: 'shoes', shoesColor: 'white', scarf: true, scarfColor: 'teal' },
+      path: [[90, 300], [320, 224], [560, 300], [320, 384]] }
+  ]
+};
+function makeNpcs() {
+  Object.keys(SCENES).forEach(function (k) {
+    var sc = SCENES[k];
+    sc.npcs = (NPC_DEFS[k] || []).map(function (d) {
+      var n = { name: d.name, spec: validSpec(d.spec), subject: d.subject, offset: d.offset || 0, walker: d.walker || null, t: Math.random() * 3, says: d.says || null };
+      n.sheets = buildCharacter(n.spec);
+      if (d.seat) { n.seat = seatById(sc, d.seat); n.seat.occupant = n.name; }
+      if (d.walker) { n.path = d.path; n.wp = 1; n.x = d.path[0][0]; n.y = d.path[0][1]; n.dir = 'up'; n.wait = Math.random() * 2; n.moving = false; }
+      if (d.stand) { n.x = d.stand[0]; n.y = d.stand[1]; n.dir = d.stand[2]; n.moving = false; }
+      return n;
+    });
+  });
+}
+function npcStatus(n) {
+  if (n.walker) return { text: n.walker, dot: '#CBB7D6' };
+  if (n.says) return { text: 'chatting', dot: '#9CC9F0' };
+  var cycle = (G.focusMin + G.breakMin) * 60, t = (G.clock + n.offset) % cycle;
+  if (t < G.focusMin * 60) return { text: n.subject + ' · ' + fmt(G.focusMin * 60 - t), dot: '#9FD8A4' };
+  return { text: 'on break · ' + fmt(cycle - t), dot: '#F2B661' };
+}
+function updateWalker(n, dt) {
+  if (n.wait > 0) { n.wait -= dt; n.moving = false; return; }
+  var tgt = n.path[n.wp], dx = tgt[0] - n.x, dy = tgt[1] - n.y, dist = Math.hypot(dx, dy), step = 38 * dt;
+  if (dist <= step) { n.x = tgt[0]; n.y = tgt[1]; n.wp = (n.wp + 1) % n.path.length; n.wait = 1 + Math.random() * 2.5; n.moving = false; return; }
+  n.x += dx / dist * step; n.y += dy / dist * step; n.moving = true;
+  n.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+}
+
+// ---------- scenes: doors and transitions ----------
+var DIRECTORY = [
+  { name: 'Nordic Nook', owner: 'mira', status: 'Weekly café', scene: 'weekly' },
+  { name: 'Midnight Study Café', owner: 'you', status: 'Public', scene: 'cafe' },
+  { name: 'Late Night Lab', owner: 'toivo', status: 'Public', scene: null },
+  { name: 'Library Loft', owner: 'aaro', status: 'Public', scene: null },
+  { name: 'Plant Corner', owner: 'lumi', status: 'Friends only', scene: null }
+];
+function sceneTitle(name) { return SCENES[name].data.name; }
+function enterScene(name, spawn) {
+  var p = G.player;
+  if (p.seat) stand();
+  S = SCENES[name]; G.scene = name;
+  spawn = spawn || S.data.spawn;
+  p.x = spawn[0]; p.y = spawn[1]; p.dir = spawn[2] || 'up'; p.moving = false;
+  G.nearExit = null; G.pushT = 0;
+  log('Entered ' + sceneTitle(name));
+  toast(name === 'plaza' ? 'Central Plaza' : name === 'weekly' ? 'Weekly café · ' + sceneTitle(name) : sceneTitle(name) + ' · your café');
+  refreshHud();
+}
+function transition(name, spawn) {
+  if (G.fading) return;
+  G.fading = true; keys = {};
+  var f = $('fade'); f.classList.add('on');
+  setTimeout(function () {
+    enterScene(name, spawn);
+    f.classList.remove('on');
+    setTimeout(function () { G.fading = false; }, 280);
+  }, 300);
+}
+function useExit(e) {
+  G.pushT = 0;
+  if (e.to === 'directory') { openDirectory(); return; }
+  if (S.name === 'plaza') G.returnTo = e.spawn;
+  var spawn = e.to === 'plaza' ? (G.returnTo || SCENES.plaza.data.spawn) : null;
+  transition(e.to, spawn);
+}
+function openDirectory() {
+  var list = $('dirList'); list.innerHTML = '';
+  DIRECTORY.forEach(function (c) {
+    var li = document.createElement('li'); li.className = 'dirrow';
+    var info = document.createElement('div'); info.className = 'dirinfo';
+    var nm = document.createElement('strong'); nm.textContent = c.name;
+    var sub = document.createElement('span'); sub.textContent = 'by ' + c.owner + ' · ' + c.status;
+    info.appendChild(nm); info.appendChild(sub);
+    var b = document.createElement('button'); b.type = 'button'; b.className = c.scene ? 'btn primary' : 'btn';
+    b.textContent = c.scene ? 'Visit' : 'Not in demo'; b.disabled = !c.scene;
+    if (c.scene) b.addEventListener('click', function () {
+      $('directory').hidden = true; G.returnTo = [348, 214, 'down']; transition(c.scene);
+    });
+    li.appendChild(info); li.appendChild(b); list.appendChild(li);
+  });
+  $('directory').hidden = false; keys = {};
+}
+
+// ---------- study logic ----------
+function log(msg) {
+  var t = new Date(); G.logs.unshift(('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2) + ':' + ('0' + t.getSeconds()).slice(-2) + '  ' + msg);
+  G.logs.length = Math.min(G.logs.length, 40);
+  var el = $('log'); if (el && !$('debug').hidden) renderLog();
+}
+function renderLog() { $('log').innerHTML = ''; G.logs.forEach(function (l) { var li = document.createElement('li'); li.textContent = l; $('log').appendChild(li); }); }
+function toast(msg, gold) {
+  var el = document.createElement('div'); el.className = 'toast' + (gold ? ' gold' : '');
+  var i = document.createElement('i'); el.appendChild(i); el.appendChild(document.createTextNode(msg));
+  $('toasts').appendChild(el);
+  while ($('toasts').children.length > 3) $('toasts').removeChild($('toasts').firstChild);
+  setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 3600);
+}
+function startSession(seat) {
+  G.session = { phase: 'focus', remaining: G.focusMin * 60, focusSec: 0, minuteAcc: 0, beans: 0, pomodoros: 0, paused: false };
+  log('Sat down at ' + seat.label + ' (' + seat.id + '), focus ' + G.focusMin + ' min');
+  toast('Focus started · ' + G.focusMin + ' min');
+}
+function endSession() {
+  var s = G.session; if (!s) return;
+  var mins = Math.floor(s.focusSec / 60);
+  toast('Studied ' + mins + ' min · +' + s.beans + ' beans', true);
+  log('Stood up: ' + mins + ' min focus, ' + s.pomodoros + ' pomodoros, +' + s.beans + ' beans');
+  G.session = null; writeSave();
+}
+function award(n, why) { G.beans += n; G.session.beans += n; if (why) log('+' + n + ' beans (' + why + ')'); }
+function tickStudy(sec) {
+  var s = G.session; if (!s || s.paused) return;
+  var guard = 0;
+  while (sec > 0 && guard++ < 1000) {
+    var step = Math.min(sec, s.remaining);
+    if (s.phase === 'focus') {
+      s.focusSec += step; s.minuteAcc += step;
+      while (s.minuteAcc >= 60) { s.minuteAcc -= 60; G.minutes += 1; award(1); }
+    }
+    s.remaining -= step; sec -= step;
+    if (s.remaining <= 0.0001) {
+      if (s.phase === 'focus') {
+        s.pomodoros += 1; award(10, 'pomodoro bonus');
+        toast('Pomodoro ' + s.pomodoros + ' done · +10 bonus beans', true);
+        s.phase = 'break'; s.remaining = G.breakMin * 60;
+        log('Focus complete, break ' + G.breakMin + ' min');
+      } else {
+        toast('Break over · back to focus');
+        s.phase = 'focus'; s.remaining = G.focusMin * 60;
+        log('Break over, focus ' + G.focusMin + ' min');
+      }
+      writeSave();
+    }
+  }
+}
+
+// ---------- input ----------
+var keys = {};
+var touchDirs = {};
+function typing(e) { var t = e.target; return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable); }
+window.addEventListener('keydown', function (e) {
+  if (typing(e)) { if (e.key === 'Escape') e.target.blur(); return; }
+  var k = e.key.toLowerCase();
+  if (k === '`' || k === 'f2') { e.preventDefault(); togglePanel('debug'); return; }
+  if (k === 'escape') { closePanels(); return; }
+  if (k === 'c' && !e.ctrlKey && !e.metaKey) { togglePanel('wardrobe'); return; }
+  if (!$('credits').hidden || !$('directory').hidden || G.fading) return;
+  if (k === 'e' || k === ' ' || k === 'enter') { if (e.target.tagName === 'BUTTON' && k !== 'e') return; e.preventDefault(); interact(); return; }
+  if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd'].indexOf(k) >= 0) { e.preventDefault(); keys[k] = true; }
+});
+window.addEventListener('keyup', function (e) { keys[e.key.toLowerCase()] = false; });
+window.addEventListener('blur', function () { keys = {}; touchDirs = {}; });
+Array.prototype.forEach.call(document.querySelectorAll('.dpad button'), function (b) {
+  var d = b.getAttribute('data-dir');
+  b.addEventListener('pointerdown', function (e) { e.preventDefault(); touchDirs[d] = true; });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) { b.addEventListener(ev, function () { touchDirs[d] = false; }); });
+});
+$('touchE').addEventListener('click', function () { interact(); });
+
+function inputVector() {
+  var x = 0, y = 0;
+  if (keys.arrowleft || keys.a || touchDirs.left) x -= 1;
+  if (keys.arrowright || keys.d || touchDirs.right) x += 1;
+  if (keys.arrowup || keys.w || touchDirs.up) y -= 1;
+  if (keys.arrowdown || keys.s || touchDirs.down) y += 1;
+  return [x, y];
+}
+function nearestSeat() {
+  var p = G.player, best = null, bd = 24;
+  S.seats.forEach(function (s) {
+    if (s.occupant) return;
+    var d = Math.hypot(s.stand[0] - p.x, s.stand[1] - p.y);
+    if (d < bd) { bd = d; best = s; }
+  });
+  return best;
+}
+function sit(seat) {
+  var p = G.player; p.seat = seat; seat.occupant = 'you'; p.dir = seat.dir; p.moving = false;
+  startSession(seat); refreshHud();
+}
+function stand() {
+  var p = G.player, s = p.seat; if (!s) return;
+  s.occupant = null; p.seat = null; p.x = s.stand[0]; p.y = s.stand[1];
+  endSession(); refreshHud();
+}
+function interact() {
+  if (!$('wardrobe').hidden || G.fading) return;
+  if (G.player.seat) { stand(); return; }
+  if (G.nearExit) { useExit(G.nearExit); return; }
+  var s = nearestSeat();
+  if (s) sit(s);
+}
+function exitAt(x, y) {
+  for (var i = 0; i < S.exits.length; i++) { var e = S.exits[i], q = e.rect; if (x >= q[0] && x <= q[0] + q[2] && y >= q[1] && y <= q[1] + q[3]) return e; }
+  return null;
+}
+
+// ---------- update ----------
+function update(dt) {
+  var p = G.player; p.t += dt;
+  var v = inputVector();
+  var panelOpen = !$('wardrobe').hidden || !$('directory').hidden || !$('credits').hidden || G.fading;
+  if (p.seat) {
+    if (!panelOpen && (v[0] || v[1])) stand();
+  } else if (!panelOpen && (v[0] || v[1])) {
+    var len = Math.hypot(v[0], v[1]), sp = G.speed * dt;
+    var nx = p.x + v[0] / len * sp, ny = p.y + v[1] / len * sp;
+    if (!blocked(nx, p.y)) p.x = nx;
+    if (!blocked(p.x, ny)) p.y = ny;
+    p.dir = Math.abs(v[0]) > Math.abs(v[1]) ? (v[0] > 0 ? 'right' : 'left') : (v[1] > 0 ? 'down' : 'up');
+    if (v[0] && v[1]) p.dir = v[1] > 0 ? 'down' : 'up';
+    p.moving = true;
+  } else p.moving = false;
+  G.nearExit = p.seat ? null : exitAt(p.x, p.y);
+  var e = G.nearExit;
+  if (e && !panelOpen && ((e.auto === 'up' && v[1] < 0 && !v[0]) || (e.auto === 'down' && v[1] > 0 && !v[0]))) {
+    G.pushT += dt; if (G.pushT > 0.2) useExit(e);
+  } else G.pushT = 0;
+  S.npcs.forEach(function (n) { n.t += dt; if (n.walker) updateWalker(n, dt); });
+}
+
+// ---------- render ----------
+var world = $('world'), wctx = world.getContext('2d');
+var labels = $('labels'), lctx = labels.getContext('2d');
+function charFrame(c) {
+  // returns {sheet, sx, sy, dx, dy, sortY}
+  if (c.seat) return { sheet: c.sheets.sit, sx: 128, sy: DIRS[c.seat.dir] * 64, dx: c.seat.frame[0], dy: c.seat.frame[1], sortY: c.seat.sortY + 0.5 };
+  var dx = Math.round(c.x - 32), dy = Math.round(c.y - 60);
+  if (c.moving) return { sheet: c.sheets.walk, sx: (1 + Math.floor(c.t * 10) % 8) * 64, sy: DIRS[c.dir] * 64, dx: dx, dy: dy, sortY: c.y };
+  return { sheet: c.sheets.idle, sx: (Math.floor(c.t * 1.6) % 2) * 64, sy: DIRS[c.dir] * 64, dx: dx, dy: dy, sortY: c.y };
+}
+function render() {
+  wctx.imageSmoothingEnabled = false;
+  wctx.globalCompositeOperation = 'source-over';
+  wctx.drawImage(S.bg, 0, 0);
+  var draw = S.objs.map(function (o) { return { kind: 'obj', o: o, sortY: o.sortY }; });
+  var chars = [G.player].concat(G.show.npcs ? S.npcs : []);
+  chars.forEach(function (c) { var f = charFrame(c); f.kind = 'char'; f.c = c; draw.push(f); });
+  draw.sort(function (a, b) { return a.sortY - b.sortY; });
+  draw.forEach(function (d) {
+    if (d.kind === 'obj') wctx.drawImage(d.o.img, d.o.x, d.o.y);
+    else wctx.drawImage(d.sheet, d.sx, d.sy, 64, 64, d.dx, d.dy, 64, 64);
+  });
+  if (G.show.night) {
+    wctx.globalCompositeOperation = 'multiply'; wctx.fillStyle = S.tint; wctx.fillRect(0, 0, W, H);
+    wctx.globalCompositeOperation = 'screen';
+    S.glows.forEach(function (g) {
+      var r = wctx.createRadialGradient(g[0], g[1], 0, g[0], g[1], g[2]);
+      r.addColorStop(0, 'rgba(255,184,107,' + (g[3] * 0.55) + ')'); r.addColorStop(1, 'rgba(255,184,107,0)');
+      wctx.fillStyle = r; wctx.fillRect(g[0] - g[2], g[1] - g[2], g[2] * 2, g[2] * 2);
+    });
+    wctx.globalCompositeOperation = 'source-over';
+  }
+  if (G.show.coll) {
+    wctx.strokeStyle = 'rgba(255,90,90,0.9)'; wctx.lineWidth = 1;
+    S.coll.forEach(function (c) { wctx.strokeRect(c.x + 0.5, c.y + 0.5, c.w - 1, c.h - 1); });
+    var B = S.bounds; wctx.strokeStyle = 'rgba(255,90,90,0.5)'; wctx.strokeRect(B.x0 + 0.5, B.y0 + 0.5, B.x1 - B.x0 - 1, B.y1 - B.y0 - 1);
+    wctx.strokeStyle = 'rgba(110,200,255,0.95)';
+    S.exits.forEach(function (e) { wctx.strokeRect(e.rect[0] + 0.5, e.rect[1] + 0.5, e.rect[2] - 1, e.rect[3] - 1); });
+    var p = G.player; if (!p.seat) { wctx.strokeStyle = '#7CF'; wctx.strokeRect(Math.round(p.x - 6) + 0.5, Math.round(p.y - 4) + 0.5, 11, 5); }
+  }
+  if (G.show.seats) {
+    S.seats.forEach(function (s) {
+      wctx.strokeStyle = s.occupant ? 'rgba(242,182,97,0.9)' : 'rgba(159,216,164,0.95)';
+      wctx.beginPath(); wctx.arc(s.stand[0] + 0.5, s.stand[1] + 0.5, 24, 0, Math.PI * 2); wctx.stroke();
+      wctx.fillStyle = wctx.strokeStyle; wctx.fillRect(s.stand[0] - 1, s.stand[1] - 1, 3, 3);
+      wctx.strokeRect(s.frame[0] + 0.5, s.frame[1] + 0.5, 63, 63);
+    });
+  }
+  if (G.show.sort) {
+    draw.forEach(function (d) {
+      wctx.fillStyle = d.kind === 'char' ? 'rgba(120,200,255,0.9)' : 'rgba(255,220,120,0.7)';
+      var x = d.kind === 'obj' ? d.o.x : d.dx + 16, w = d.kind === 'obj' ? d.o.img.width : 32;
+      wctx.fillRect(x, Math.round(d.sortY), w, 1);
+    });
+  }
+  renderLabels(chars);
+}
+var placed = [];
+function tag(x, y, text, opts) {
+  opts = opts || {};
+  lctx.font = '600 15px "Pixelify Sans", monospace';
+  var w = lctx.measureText(text).width + (opts.dot ? 26 : 16), h = 22;
+  var bx = Math.round(x - w / 2), by = Math.round(y - h);
+  for (var tries = 0; tries < 6; tries++) {
+    var hit = placed.some(function (r) { return bx < r[0] + r[2] + 4 && bx + w + 4 > r[0] && by < r[1] + r[3] + 2 && by + h + 2 > r[1]; });
+    if (!hit) break;
+    by -= h + 4;
+  }
+  placed.push([bx, by, w, h]);
+  lctx.fillStyle = opts.bg || 'rgba(22,16,28,0.84)';
+  lctx.fillRect(bx, by, w, h);
+  if (opts.border) { lctx.strokeStyle = opts.border; lctx.lineWidth = 2; lctx.strokeRect(bx + 1, by + 1, w - 2, h - 2); }
+  if (opts.dot) { lctx.fillStyle = opts.dot; lctx.fillRect(bx + 8, by + 7, 8, 8); }
+  lctx.fillStyle = opts.color || '#F6E7CF';
+  lctx.textBaseline = 'middle';
+  lctx.fillText(text, bx + (opts.dot ? 20 : 8), by + h / 2 + 1);
+  return by;
+}
+function sign(x, y, title, sub) {
+  lctx.font = '600 16px "Pixelify Sans", monospace'; var w1 = lctx.measureText(title).width;
+  lctx.font = '700 12px "Nunito", sans-serif'; var w2 = lctx.measureText(sub).width;
+  var w = Math.max(w1, w2) + 24, h = 40, bx = Math.round(x - w / 2), by = Math.round(y - h / 2);
+  lctx.fillStyle = '#3B2618'; lctx.fillRect(bx - 2, by - 2, w + 4, h + 4);
+  lctx.fillStyle = '#6B4529'; lctx.fillRect(bx, by, w, h);
+  lctx.fillStyle = '#8A5E3A'; lctx.fillRect(bx, by, w, 3);
+  lctx.textAlign = 'center'; lctx.textBaseline = 'middle';
+  lctx.font = '600 16px "Pixelify Sans", monospace'; lctx.fillStyle = '#FFE2A8'; lctx.fillText(title, x, by + 14);
+  lctx.font = '700 12px "Nunito", sans-serif'; lctx.fillStyle = '#E9D2B4'; lctx.fillText(sub, x, by + 29);
+  lctx.textAlign = 'left';
+  placed.push([bx, by, w, h]);
+}
+function bubble(x, y, text) {
+  lctx.font = '600 14px "Nunito", sans-serif';
+  var w = lctx.measureText(text).width + 18, h = 24, bx = Math.round(x - w / 2), by = Math.round(y - h);
+  lctx.fillStyle = '#24182A'; lctx.fillRect(bx - 2, by - 2, w + 4, h + 4);
+  lctx.fillStyle = '#FFFBF2'; lctx.fillRect(bx, by, w, h);
+  lctx.fillRect(Math.round(x) - 4, by + h, 8, 4); lctx.fillStyle = '#24182A'; lctx.fillRect(Math.round(x) - 2, by + h + 4, 4, 2);
+  lctx.fillStyle = '#24182A'; lctx.textBaseline = 'middle'; lctx.fillText(text, bx + 9, by + h / 2 + 1);
+  placed.push([bx, by, w, h]);
+}
+function renderLabels(chars) {
+  lctx.clearRect(0, 0, 1280, 800);
+  placed = [];
+  S.signs.forEach(function (s) { sign(s.x * 2, s.y * 2, s.title, s.sub); });
+  if (G.show.npcs) S.npcs.forEach(function (n, i) {
+    if (!n.says) return;
+    var phase = Math.floor((G.realT + i * 3.5) / 3.5) % (n.says.length * 2);
+    if (phase % 2 === 0) bubble((n.x) * 2, (n.y - 60) * 2 - 30, n.says[(phase / 2) % n.says.length]);
+  });
+  if (G.show.tags) {
+    chars.forEach(function (c) {
+      var f = charFrame(c), x = (f.dx + 32) * 2, y = (f.dy + 12) * 2 - 6;
+      if (c === G.player) {
+        var s = G.session, label = 'You';
+        if (s) label = s.paused ? 'You · paused' : (s.phase === 'focus' ? 'You · ' + ($('subject').value || 'Studying') + ' ' + fmt(s.remaining) : 'You · break ' + fmt(s.remaining));
+        tag(x, y, label, { bg: '#F2B661', color: '#2A1A12', border: '#2A1A12' });
+      } else {
+        var st = npcStatus(c);
+        tag(x, y, c.name + ' · ' + st.text, { dot: st.dot });
+      }
+    });
+  }
+  if (G.nearExit && !G.fading) {
+    var q = G.nearExit.rect;
+    tag((q[0] + q[2] / 2) * 2, q[1] * 2 - 4, 'E  ' + G.nearExit.label, { bg: '#FFFBF2', color: '#24182A', border: '#24182A' });
+  } else if (!G.player.seat && $('wardrobe').hidden) {
+    var s = nearestSeat();
+    if (s) {
+      var fx = (s.frame[0] + 32) * 2, fy = (s.frame[1] + 14) * 2;
+      tag(fx, fy, 'E  Sit and study', { bg: '#FFFBF2', color: '#24182A', border: '#24182A' });
+    }
+  }
+}
+
+// ---------- HUD ----------
+function refreshHud() {
+  $('beanCount').textContent = G.beans.toLocaleString('en-US');
+  var h = Math.floor(G.minutes / 60), m = G.minutes % 60;
+  $('hoursLine').textContent = (h ? h + ' h ' : '') + m + ' min studied';
+  var seated = !!G.player.seat;
+  $('timer').hidden = !seated;
+  $('hint').hidden = seated;
+  var s = G.session;
+  if (s) {
+    $('phase').textContent = s.paused ? 'PAUSED' : (s.phase === 'focus' ? 'FOCUS' : 'BREAK');
+    $('phase').className = 'phase' + (s.phase === 'break' ? ' break' : '');
+    $('clock').textContent = fmt(s.remaining);
+    $('earned').textContent = '+' + s.beans + ' beans';
+    $('pomoCount').textContent = 'Pomodoro ' + (s.pomodoros % 4 + (s.phase === 'focus' ? 1 : 0) || 4) + ' of 4';
+    var segs = $('segs').children, done = s.pomodoros % 4, frac = s.phase === 'focus' ? 1 - s.remaining / (G.focusMin * 60) : 0;
+    for (var i = 0; i < 4; i++) segs[i].firstChild.style.width = (i < done ? 100 : i === done ? frac * 100 : 0) + '%';
+    if (s.pomodoros && s.pomodoros % 4 === 0 && s.phase === 'break') for (var j = 0; j < 4; j++) segs[j].firstChild.style.width = '100%';
+    $('pauseBtn').textContent = s.paused ? 'Resume' : 'Pause';
+  }
+  var here = 1 + (G.show.npcs ? S.npcs.length : 0);
+  $('plateName').textContent = S.data.name;
+  $('crowd').textContent = here + ' here · ' + S.data.sub;
+}
+function renderStats() {
+  var p = G.player, s = G.session;
+  var rows = [
+    ['FPS', G.fps.toFixed(0)],
+    ['Scene', S.name],
+    ['Near door', G.nearExit ? G.nearExit.id : 'none'],
+    ['Feet', p.seat ? 'seated' : Math.round(p.x) + ', ' + Math.round(p.y)],
+    ['Facing', p.dir],
+    ['State', p.seat ? 'seated at ' + p.seat.id : (p.moving ? 'walking' : 'standing')],
+    ['Near seat', (nearestSeat() || {}).id || 'none'],
+    ['Session', s ? s.phase + ' ' + fmt(s.remaining) + (s.paused ? ' (paused)' : '') : 'none'],
+    ['Time speed', G.timeScale + 'x'],
+    ['Beans', G.beans],
+    ['Studied', G.minutes + ' min']
+  ];
+  var dl = $('stats'); dl.innerHTML = '';
+  rows.forEach(function (r) { var dt = document.createElement('dt'); dt.textContent = r[0]; var dd = document.createElement('dd'); dd.textContent = r[1]; dl.appendChild(dt); dl.appendChild(dd); });
+}
+
+// ---------- panels ----------
+function togglePanel(id) { var el = $(id); el.hidden = !el.hidden; if (id === 'debug' && !el.hidden) renderLog(); if (id === 'wardrobe' && !el.hidden) { keys = {}; buildWardrobe(); } }
+function closePanels() { $('wardrobe').hidden = true; $('debug').hidden = true; $('credits').hidden = true; $('directory').hidden = true; }
+$('openWardrobe').addEventListener('click', function () { togglePanel('wardrobe'); });
+$('closeWardrobe').addEventListener('click', function () { $('wardrobe').hidden = true; });
+$('doneWardrobe').addEventListener('click', function () { $('wardrobe').hidden = true; });
+$('openDebug').addEventListener('click', function () { togglePanel('debug'); });
+$('closeDebug').addEventListener('click', function () { $('debug').hidden = true; });
+$('openCredits').addEventListener('click', function () { $('credits').hidden = false; });
+$('closeCredits').addEventListener('click', function () { $('credits').hidden = true; });
+$('closeDirectory').addEventListener('click', function () { $('directory').hidden = true; });
+$('directory').addEventListener('click', function (e) { if (e.target === $('directory')) $('directory').hidden = true; });
+$('credits').addEventListener('click', function (e) { if (e.target === $('credits')) $('credits').hidden = true; });
+
+function setSpec(patch) {
+  var p = G.player;
+  p.spec = validSpec(Object.assign({}, p.spec, patch));
+  p.sheets = buildCharacter(p.spec);
+  writeSave(); buildWardrobe();
+}
+function group(title, nodes) {
+  var g = document.createElement('div'); g.className = 'group';
+  var l = document.createElement('span'); l.className = 'label'; l.textContent = title; g.appendChild(l);
+  nodes.forEach(function (n) { g.appendChild(n); }); return g;
+}
+function chips(list, current, labelOf, onPick) {
+  var w = document.createElement('div'); w.className = 'chips';
+  list.forEach(function (v) {
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'opt'; b.textContent = labelOf(v);
+    b.setAttribute('aria-pressed', String(v === current)); b.addEventListener('click', function () { onPick(v); }); w.appendChild(b);
+  });
+  return w;
+}
+function swatches(list, current, pal, idx, onPick) {
+  var w = document.createElement('div'); w.className = 'swatches';
+  list.forEach(function (v) {
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'sw'; b.style.background = pal[v][Math.min(idx, pal[v].length - 1)];
+    b.setAttribute('aria-label', pretty(v)); b.title = pretty(v); b.setAttribute('aria-pressed', String(v === current));
+    b.addEventListener('click', function () { onPick(v); }); w.appendChild(b);
+  });
+  return w;
+}
+function buildWardrobe() {
+  var s = G.player.spec, body = $('wardrobeBody');
+  var keepScroll = body.scrollTop;
+  while (body.children.length > 1) body.removeChild(body.lastChild);
+  var P = A.palettes;
+  body.appendChild(group('Body', [chips(['female', 'male'], s.body, function (v) { return v === 'female' ? 'Body A' : 'Body B'; }, function (v) { setSpec({ body: v }); })]));
+  body.appendChild(group('Skin', [swatches(OPTS.skin, s.skin, P.body, 3, function (v) { setSpec({ skin: v }); })]));
+  body.appendChild(group('Eyes', [swatches(OPTS.eyes, s.eyes, P.eye, 1, function (v) { setSpec({ eyes: v }); })]));
+  body.appendChild(group('Hairstyle', [chips(OPTS.hair, s.hair, function (v) { return CAT.hair[v].label; }, function (v) { setSpec({ hair: v }); })]));
+  body.appendChild(group('Hair color', [swatches(OPTS.hairColor, s.hairColor, P.hair, 3, function (v) { setSpec({ hairColor: v }); })]));
+  body.appendChild(group('Top', [chips(OPTS.top, s.top, function (v) { return CAT.top[v].label; }, function (v) { setSpec({ top: v }); }), swatches(OPTS.cloth, s.topColor, P.cloth, 3, function (v) { setSpec({ topColor: v }); })]));
+  body.appendChild(group('Bottoms', [chips(OPTS.legs, s.legs, function (v) { return CAT.legs[v].label; }, function (v) { setSpec({ legs: v }); }), swatches(OPTS.cloth, s.legsColor, P.cloth, 3, function (v) { setSpec({ legsColor: v }); })]));
+  body.appendChild(group('Shoes', [chips(OPTS.feet, s.feet, function (v) { return CAT.feet[v].label; }, function (v) { setSpec({ feet: v }); }), swatches(OPTS.cloth, s.shoesColor, P.cloth, 3, function (v) { setSpec({ shoesColor: v }); })]));
+  var extras = chips(['glasses', 'scarf'], null, function (v) { return v === 'glasses' ? 'Glasses' : 'Scarf'; }, function (v) { var o = {}; o[v] = !s[v]; setSpec(o); });
+  extras.children[0].setAttribute('aria-pressed', String(!!s.glasses)); extras.children[1].setAttribute('aria-pressed', String(!!s.scarf));
+  var ex = [extras]; if (s.scarf) ex.push(swatches(OPTS.cloth, s.scarfColor, P.cloth, 3, function (v) { setSpec({ scarfColor: v }); }));
+  body.appendChild(group('Extras', ex));
+  body.scrollTop = keepScroll;
+}
+$('randomize').addEventListener('click', function () { setSpec(randomSpec()); toast('New look'); });
+var pctx = $('previewCanvas').getContext('2d');
+function renderPreview(t) {
+  if ($('wardrobe').hidden || !G.player.sheets) return;
+  pctx.imageSmoothingEnabled = false; pctx.clearRect(0, 0, 64, 64);
+  var dir = ['down', 'left', 'up', 'right'][Math.floor(t / 1.6) % 4];
+  pctx.drawImage(G.player.sheets.walk, (1 + Math.floor(t * 9) % 8) * 64, DIRS[dir] * 64, 64, 64, 0, 0, 64, 64);
+}
+
+// debug controls
+function bindToggle(id, key, after) { var el = $(id); el.checked = G.show[key]; el.addEventListener('change', function () { G.show[key] = el.checked; if (after) after(); log((el.checked ? 'Show ' : 'Hide ') + key); }); }
+bindToggle('dbgColl', 'coll'); bindToggle('dbgSeats', 'seats'); bindToggle('dbgSort', 'sort'); bindToggle('dbgNight', 'night'); bindToggle('dbgTags', 'tags');
+bindToggle('dbgNpcs', 'npcs', function () { Object.keys(SCENES).forEach(function (k) { SCENES[k].npcs.forEach(function (n) { if (n.seat) n.seat.occupant = G.show.npcs ? n.name : null; }); }); refreshHud(); });
+[1, 10, 60, 300].forEach(function (v) {
+  var b = document.createElement('button'); b.type = 'button'; b.className = 'opt'; b.textContent = v + '×';
+  b.setAttribute('aria-pressed', String(v === G.timeScale));
+  b.addEventListener('click', function () { G.timeScale = v; Array.prototype.forEach.call($('speedChips').children, function (c) { c.setAttribute('aria-pressed', String(c === b)); }); log('Time speed ' + v + 'x'); });
+  $('speedChips').appendChild(b);
+});
+$('focusMin').addEventListener('change', function () { G.focusMin = clamp(parseInt(this.value, 10) || 25, 1, 120); this.value = G.focusMin; log('Focus length ' + G.focusMin + ' min'); writeSave(); });
+$('breakMin').addEventListener('change', function () { G.breakMin = clamp(parseInt(this.value, 10) || 5, 1, 60); this.value = G.breakMin; log('Break length ' + G.breakMin + ' min'); writeSave(); });
+$('walkSpeed').addEventListener('input', function () { G.speed = +this.value; $('walkSpeedVal').textContent = G.speed + ' px/s'; });
+$('dbgBeans').addEventListener('click', function () { G.beans += 100; log('+100 beans (debug)'); writeSave(); refreshHud(); });
+$('dbgSkip').addEventListener('click', function () { if (!G.session) { toast('Sit down first to start a session'); return; } tickStudy(G.session.remaining); refreshHud(); });
+Array.prototype.forEach.call(document.querySelectorAll('[data-goto]'), function (b) {
+  b.addEventListener('click', function () { var to = b.getAttribute('data-goto'); if (to !== 'plaza' && S.name === 'plaza') G.returnTo = [G.player.x, G.player.y, 'down']; transition(to, to === 'plaza' ? (G.returnTo || null) : null); });
+});
+var resetArmed = false;
+$('dbgReset').addEventListener('click', function () {
+  if (!resetArmed) { resetArmed = true; this.textContent = 'Click again to reset'; var b = this; setTimeout(function () { resetArmed = false; b.textContent = 'Reset save'; }, 3000); return; }
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  if (G.player.seat) { G.player.seat.occupant = null; G.player.seat = null; G.session = null; }
+  G.beans = 0; G.minutes = 0; G.player.x = S.data.spawn[0]; G.player.y = S.data.spawn[1];
+  G.player.spec = validSpec(DEFAULT_SPEC); G.player.sheets = buildCharacter(G.player.spec);
+  this.textContent = 'Reset save'; resetArmed = false; log('Save reset'); toast('Save reset'); refreshHud();
+});
+$('pauseBtn').addEventListener('click', function () { if (!G.session) return; G.session.paused = !G.session.paused; log(G.session.paused ? 'Paused' : 'Resumed'); refreshHud(); });
+$('standBtn').addEventListener('click', function () { stand(); });
+$('subject').addEventListener('change', writeSave);
+
+// credits
+function renderCredits() {
+  var b = $('creditsBody'), c = A.credits;
+  function para(t) { var p = document.createElement('p'); p.textContent = t; return p; }
+  function section(title, info) {
+    var h = document.createElement('h3'); h.textContent = title; b.appendChild(h);
+    var p = document.createElement('p'); var a = document.createElement('a'); a.href = info.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = info.source;
+    p.appendChild(a); p.appendChild(document.createTextNode(' · ' + info.licenses.join(', '))); b.appendChild(p);
+    b.appendChild(para('Artists: ' + info.authors.join(', ') + '.'));
+  }
+  b.appendChild(para('This demo uses only free, credited pixel art. The art keeps its original licenses; recolored character parts are shared under the same terms.'));
+  section('Room, furniture and decor', c.room);
+  section('Characters', c.characters);
+  b.appendChild(para('Fonts: Pixelify Sans and Nunito from Google Fonts (Open Font License).'));
+}
+
+// ---------- scaling ----------
+function fit() {
+  var vp = $('viewport'), k = Math.min(vp.clientWidth / 1280, vp.clientHeight / 800);
+  if (k >= 1) k = Math.floor(k * 2) / 2;
+  $('stage').style.transform = 'scale(' + k + ') translate(-50%, -50%)';
+}
+window.addEventListener('resize', fit);
+
+// ---------- loop ----------
+var last = performance.now(), lastStudy = Date.now(), fpsAcc = 0, fpsN = 0, statT = 0, hudT = 0, saveT = 0;
+function frame(now) {
+  var dt = Math.min(0.05, (now - last) / 1000); last = now;
+  var wall = Date.now(), sdt = Math.min(4 * 3600, (wall - lastStudy) / 1000); lastStudy = wall;
+  G.clock += sdt * G.timeScale; G.realT = (G.realT || 0) + dt;
+  tickStudy(sdt * G.timeScale);
+  update(dt);
+  render();
+  renderPreview(now / 1000);
+  fpsAcc += dt; fpsN++; if (fpsAcc > 0.5) { G.fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; }
+  hudT += dt; if (hudT > 0.1) { hudT = 0; refreshHud(); }
+  statT += dt; if (statT > 0.2 && !$('debug').hidden) { statT = 0; renderStats(); }
+  saveT += dt; if (saveT > 10) { saveT = 0; writeSave(); }
+  requestAnimationFrame(frame);
+}
+
+// ---------- boot ----------
+function start(hot) {
+  fit();
+  var jobs = [];
+  Object.keys(A.sheets).forEach(function (k) { jobs.push(loadImage(A.sheets[k]).then(function (im) { IMG[k] = im; })); });
+  Object.keys(SCENES).forEach(function (k) {
+    var sc = SCENES[k];
+    jobs.push(loadImage(sc.data.bg).then(function (im) { sc.bg = im; }));
+    sc.data.objects.forEach(function (o) { jobs.push(loadImage(o.img).then(function (im) { sc.objs.push({ name: o.name, x: o.x, y: o.y, sortY: o.sortY, img: im }); })); });
+  });
+  $('beanIcon').src = A.icons.bean;
+  Promise.all(jobs).then(function () {
+    var save = (hot && hot.save) || readSave() || {};
+    G.beans = save.beans || 0; G.minutes = save.minutes || 0;
+    G.focusMin = save.focusMin || 25; G.breakMin = save.breakMin || 5;
+    $('focusMin').value = G.focusMin; $('breakMin').value = G.breakMin;
+    if (save.subject) $('subject').value = save.subject;
+    G.clock = 0;
+    G.player.spec = validSpec(save.spec || DEFAULT_SPEC);
+    G.player.sheets = buildCharacter(G.player.spec);
+    makeNpcs();
+    S = SCENES.plaza;
+    var sp = S.data.spawn; G.player.x = sp[0]; G.player.y = sp[1]; G.player.dir = sp[2];
+    renderCredits();
+    $('loading').hidden = true; $('hud').hidden = false;
+    refreshHud();
+    log('Loaded ' + Object.keys(SCENES).length + ' scenes and ' + Object.keys(IMG).length + ' sprite sheets');
+    toast('Walk into a café door, or press E at a free seat to study');
+    requestAnimationFrame(frame);
+  }).catch(function (e) { $('loading').textContent = 'Could not load the café sprites.'; console.error(e); });
+}
+window.claude && window.claude.hot && window.claude.hot.snapshot && window.claude.hot.snapshot(function () { return { save: { beans: G.beans, minutes: G.minutes, spec: G.player.spec, focusMin: G.focusMin, breakMin: G.breakMin, subject: $('subject').value } }; });
+if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(start); else start((window.claude && window.claude.hot && window.claude.hot.data) || {});
+})();
+</script>
